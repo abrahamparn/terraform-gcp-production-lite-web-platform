@@ -1,0 +1,23 @@
+# Terraform local files
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Terraform variable files
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Terraform plan files
+*.tfplan
+tfplan
+
+# OS files
+.DS_Store
+
+# Local credentials
+*.json
+*.pem
+*.key

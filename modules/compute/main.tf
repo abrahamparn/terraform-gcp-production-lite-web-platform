@@ -1,0 +1,58 @@
+resource "google_compute_instance_template" "this" {
+  name_prefix  = "${var.environment}-${var.mig_name}-template-"
+  machine_type = var.machine_type
+  tags         = var.tags
+
+  disk {
+    source_image = "debian-cloud/debian-12"
+    auto_delete  = true
+    boot         = true
+    disk_size_gb = 10
+    disk_type    = "pd-balanced"
+  }
+
+  network_interface {
+    subnetwork = var.subnetwork_self_link
+
+    # we will not create a vm with external ip address
+  }
+
+  metadata_startup_script = file(var.startup_script_path)
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  service_account {
+    email  = var.service_account_email
+    scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+
+  }
+
+
+}
+
+
+resource "google_compute_region_instance_group_manager" "this" {
+  name               = "${var.environment}-${var.mig_name}"
+  region             = var.region
+  base_instance_name = "${var.environment}-${var.mig_name}"
+  target_size        = var.target_size
+
+
+  version {
+    instance_template = google_compute_instance_template.this.self_link
+  }
+
+  named_port {
+    name = "http"
+    port = var.app_port
+  }
+
+  distribution_policy_zones = var.zones
+
+  auto_healing_policies {
+    health_check      = var.health_check_self_link
+    initial_delay_sec = 120
+  }
+}

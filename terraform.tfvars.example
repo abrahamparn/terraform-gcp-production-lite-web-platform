@@ -1,0 +1,93 @@
+project_id      = "your-gcp-project-id"
+region          = "asia-southeast2"
+environment     = "dev"
+name_prefix     = "prod-lite"
+admin_principal = "user:your-email@example.com"
+
+network_name = "web-platform-vpc"
+
+subnets = {
+  app = {
+    cidr_range            = "10.80.1.0/24"
+    private_google_access = true
+    role                  = "application"
+  }
+
+  db = {
+    cidr_range            = "10.80.2.0/24"
+    private_google_access = true
+    role                  = "database-reserved"
+  }
+}
+
+firewall_rules = {
+  allow-lb-health-check = {
+    description   = "Allow Google Cloud load balancer health checks and proxy traffic to backend instances."
+    source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
+    target_tags   = ["web-backend"]
+
+    allow = [
+      {
+        protocol = "tcp"
+        ports    = ["80"]
+      }
+    ]
+  }
+
+  allow-iap-ssh = {
+    description   = "Allow SSH to private backend instances through Identity-Aware Proxy."
+    source_ranges = ["35.235.240.0/20"]
+    target_tags   = ["web-backend"]
+
+    allow = [
+      {
+        protocol = "tcp"
+        ports    = ["22"]
+      }
+    ]
+  }
+
+  allow-internal = {
+    description   = "Allow internal traffic between platform subnets."
+    source_ranges = ["10.80.0.0/16"]
+
+    allow = [
+      {
+        protocol = "tcp"
+        ports    = ["0-65535"]
+      },
+      {
+        protocol = "udp"
+        ports    = ["0-65535"]
+      },
+      {
+        protocol = "icmp"
+      }
+    ]
+  }
+}
+
+nat_subnet_keys = ["app"]
+
+service_accounts = {
+  app = {
+    account_id    = "dev-prod-lite-app-sa"
+    display_name  = "Production Lite App Service Account"
+    description   = "Service account used by private application VM instances."
+    project_roles = [
+      "roles/logging.logWriter",
+      "roles/monitoring.metricWriter"
+    ]
+  }
+}
+
+mig_name           = "web-mig"
+mig_instance_count = 1
+mig_machine_type   = "e2-micro"
+mig_zones          = ["asia-southeast2-a"]
+mig_subnet_key     = "app"
+mig_tags           = ["web-backend"]
+
+lb_name           = "web-lb"
+app_port          = 80
+health_check_path = "/healthz"

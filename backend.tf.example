@@ -1,0 +1,6 @@
+terraform {
+  backend "gcs" {
+    bucket = "YOUR_TERRAFORM_STATE_BUCKET"
+    prefix = "terraform-gcp-production-lite-web-platform/v1"
+  }
+}

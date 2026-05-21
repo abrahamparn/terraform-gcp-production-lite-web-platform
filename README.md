@@ -1,4 +1,4 @@
-# Terraform GCP Porduction-Lite Web Platform
+# Terraform GCP Production-Lite Web Platform
 
 A production lite google cloud web platform project for showcasing that I can code terraform.
 

@@ -11,6 +11,10 @@ The verification checks cover:
 ```text
 Terraform outputs
 load balancer response
+DNS records
+Google-managed SSL certificate
+HTTPS response
+HTTP-to-HTTPS redirect
 application endpoints
 VPC and subnet creation
 firewall rules
@@ -34,6 +38,10 @@ The platform is considered successfully deployed when:
 [ ] Root endpoint works
 [ ] /healthz returns 200
 [ ] /metadata returns JSON
+[ ] Domain resolves to the load balancer IP
+[ ] HTTPS certificate is active when HTTPS is enabled
+[ ] HTTPS endpoint works when HTTPS is enabled
+[ ] HTTP redirects to HTTPS when redirect is enabled
 [ ] VPC exists
 [ ] App subnet exists
 [ ] DB subnet exists
@@ -65,13 +73,19 @@ subnets
 firewall_rules
 cloud_nat_name
 cloud_router_name
-health_check_name
+health_check_path
 mig_name
 mig_instance_group
 load_balancer_ip
 load_balancer_url
 curl_test_command
 curl_health_check_command
+https_enabled
+http_redirect_enabled
+managed_ssl_certificate_domains
+https_url
+ssl_certificate_name
+https_forwarding_rule_name
 platform_summary
 ```
 
@@ -109,7 +123,199 @@ The load balancer may take time to mark the backend healthy.
 
 ---
 
-## 5. Verify Health Endpoint
+## 5. Verify DNS for Custom Domain
+
+Use this section when `managed_ssl_certificate_domains` contains one or more domains.
+
+Get the load balancer IP:
+
+```bash
+terraform output -raw load_balancer_ip
+```
+
+Check DNS:
+
+```bash
+dig +short mydomain.tld A
+dig +short www.mydomain.tld A
+```
+
+Expected:
+
+```text
+Both records return the load balancer IP.
+```
+
+Example:
+
+```text
+mydomain.tld      -> 8.233.201.124
+www.mydomain.tld  -> 8.233.201.124
+```
+
+If DNS does not match the load balancer IP:
+
+```text
+check the registrar DNS records
+remove conflicting parking or redirect records
+wait for DNS propagation
+do not enable HTTP-to-HTTPS redirect yet
+```
+
+---
+
+## 6. Verify Google-Managed SSL Certificate
+
+Use this section when `enable_https = true`.
+
+Get the certificate name:
+
+```bash
+terraform output -raw ssl_certificate_name
+```
+
+Describe the certificate:
+
+```bash
+gcloud compute ssl-certificates describe CERTIFICATE_NAME \
+  --global
+```
+
+The `gcloud` resource name is `ssl-certificates` plural.
+
+Example:
+
+```bash
+gcloud compute ssl-certificates describe dev-web-lb-managed-cert \
+  --global
+```
+
+Check:
+
+```text
+type: MANAGED
+managed.status: ACTIVE
+managed.domainStatus.<domain>: ACTIVE
+```
+
+If the status is `PROVISIONING`, wait and check again:
+
+```bash
+gcloud compute ssl-certificates describe CERTIFICATE_NAME \
+  --global \
+  --format="yaml(name,type,managed)"
+```
+
+Common reasons for a certificate staying in `PROVISIONING`:
+
+```text
+domain does not resolve to the load balancer IP
+DNS was recently changed and has not propagated
+forwarding rule on port 443 is not created yet
+certificate domain list does not match the public DNS names
+```
+
+---
+
+## 7. Verify HTTPS Endpoint
+
+Use this section when `enable_https = true`.
+
+Run:
+
+```bash
+curl -I https://mydomain.tld
+```
+
+Expected response:
+
+```text
+HTTP/2 200
+```
+
+or:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Then verify the body:
+
+```bash
+curl -i https://mydomain.tld
+```
+
+Expected body:
+
+```text
+Hi from Terraform GCP Production-Lite Platform
+```
+
+Verify the health endpoint through HTTPS:
+
+```bash
+curl -i https://mydomain.tld/healthz
+```
+
+Expected:
+
+```text
+HTTP response is 200
+body is ok
+```
+
+---
+
+## 8. Verify HTTP-to-HTTPS Redirect
+
+Use this section when `enable_http_redirect = true`.
+
+Run:
+
+```bash
+curl -I http://mydomain.tld
+```
+
+Expected response:
+
+```text
+HTTP/1.1 301 Moved Permanently
+location: https://mydomain.tld/
+```
+
+The exact header casing may differ. `Location` and `location` are equivalent.
+
+Also check the `www` hostname if it is in `managed_ssl_certificate_domains`:
+
+```bash
+curl -I http://www.mydomain.tld
+```
+
+Expected response:
+
+```text
+HTTP/1.1 301 Moved Permanently
+location: https://www.mydomain.tld/
+```
+
+Follow redirects end to end:
+
+```bash
+curl -IL http://mydomain.tld
+```
+
+Expected sequence:
+
+```text
+HTTP 301 from http://mydomain.tld
+HTTP 200 from https://mydomain.tld
+```
+
+Do not enable redirect until HTTPS works. Redirecting before the managed certificate is active can make the domain appear broken to users.
+
+---
+
+## 9. Verify Health Endpoint
 
 Run:
 
@@ -129,7 +335,7 @@ This endpoint is used to confirm that the application is alive.
 
 ---
 
-## 6. Verify Metadata Endpoint
+## 10. Verify Metadata Endpoint
 
 Run:
 
@@ -152,7 +358,7 @@ The `hostname` value should come from the backend VM instance.
 
 ---
 
-## 7. Verify VPC
+## 11. Verify VPC
 
 Run:
 
@@ -189,7 +395,7 @@ routingConfig.routingMode: REGIONAL
 
 ---
 
-## 8. Verify Subnets
+## 12. Verify Subnets
 
 Run:
 
@@ -230,7 +436,7 @@ privateIpGoogleAccess is enabled if configured
 
 ---
 
-## 9. Verify Firewall Rules
+## 13. Verify Firewall Rules
 
 List firewall rules:
 
@@ -304,7 +510,7 @@ This should not exist.
 
 ---
 
-## 10. Verify Cloud Router
+## 14. Verify Cloud Router
 
 Run:
 
@@ -330,7 +536,7 @@ gcloud compute routers describe ROUTER_NAME \
 
 ---
 
-## 11. Verify Cloud NAT
+## 15. Verify Cloud NAT
 
 Run:
 
@@ -362,7 +568,7 @@ natIpAllocateOption: AUTO_ONLY
 sourceSubnetworkIpRangesToNat: LIST_OF_SUBNETWORKS
 ```
 
-If your v1.0 still uses all subnet NAT, document it and improve later.
+If an older deployment still uses all subnet NAT, document it and improve later.
 
 Preferred target design:
 
@@ -373,7 +579,7 @@ DB subnet does not receive NAT by default.
 
 ---
 
-## 12. Verify Service Account
+## 16. Verify Service Account
 
 List service accounts:
 
@@ -412,7 +618,7 @@ roles/owner
 
 ---
 
-## 13. Verify Instance Template
+## 17. Verify Instance Template
 
 List instance templates:
 
@@ -439,7 +645,7 @@ no external access config
 
 ---
 
-## 14. Verify Managed Instance Group
+## 18. Verify Managed Instance Group
 
 List MIGs:
 
@@ -480,7 +686,7 @@ instances are part of the MIG
 
 ---
 
-## 15. Verify Backend Service
+## 19. Verify Backend Service
 
 List backend services:
 
@@ -507,7 +713,7 @@ backend group points to MIG instance group
 
 ---
 
-## 16. Verify Backend Health
+## 20. Verify Backend Health
 
 Run:
 
@@ -534,7 +740,7 @@ check startup logs
 
 ---
 
-## 17. Verify Global Forwarding Rule
+## 21. Verify Global Forwarding Rules
 
 List:
 
@@ -553,14 +759,49 @@ Expected:
 
 ```text
 IP address matches Terraform output
-port range is 80
-target points to target HTTP proxy
+port range is 80 for HTTP forwarding rule
+port range is 443 for HTTPS forwarding rule when HTTPS is enabled
+HTTP target points to target HTTP proxy
+HTTPS target points to target HTTPS proxy when HTTPS is enabled
 load balancing scheme is EXTERNAL_MANAGED
 ```
 
 ---
 
-## 18. Verify Backend VMs Have No External IP
+## 22. Verify Target Proxies
+
+Verify the HTTP proxy:
+
+```bash
+gcloud compute target-http-proxies describe TARGET_HTTP_PROXY_NAME \
+  --global
+```
+
+Expected:
+
+```text
+proxy points to the application URL map
+```
+
+When HTTPS is enabled, verify the HTTPS proxy:
+
+```bash
+gcloud compute target-https-proxies describe TARGET_HTTPS_PROXY_NAME \
+  --global
+```
+
+Expected:
+
+```text
+proxy points to the same application URL map
+proxy has the Google-managed SSL certificate attached
+```
+
+If HTTP-to-HTTPS redirect is enabled, verify the redirect HTTP proxy points to the redirect URL map, not the application URL map.
+
+---
+
+## 23. Verify Backend VMs Have No External IP
 
 List instances:
 
@@ -586,7 +827,7 @@ This confirms that backend instances are private.
 
 ---
 
-## 19. Verify IAP SSH
+## 24. Verify IAP SSH
 
 SSH into a backend instance:
 
@@ -619,7 +860,7 @@ exit
 
 ---
 
-## 20. Verify Application Service
+## 25. Verify Application Service
 
 Inside the VM:
 
@@ -647,7 +888,7 @@ sudo journalctl -u google-startup-scripts.service --no-pager -n 100
 
 ---
 
-## 21. Verify Outbound Internet from Private VM
+## 26. Verify Outbound Internet from Private VM
 
 Inside the VM:
 
@@ -674,7 +915,7 @@ check VM subnet
 
 ---
 
-## 22. Verification Evidence for Portfolio
+## 27. Verification Evidence for Portfolio
 
 Capture screenshots or terminal output for:
 
@@ -684,6 +925,10 @@ terraform output
 curl root endpoint
 curl /healthz
 curl /metadata
+DNS records for custom domain
+managed SSL certificate status
+curl HTTPS endpoint
+curl HTTP-to-HTTPS redirect
 backend service health
 VM list showing no external IP
 Cloud NAT configuration
@@ -704,18 +949,22 @@ Suggested filenames:
 03-root-endpoint.png
 04-healthz.png
 05-metadata.png
-06-backend-health.png
-07-private-vm-no-external-ip.png
-08-cloud-nat.png
-09-mig.png
+06-dns-records.png
+07-managed-ssl-certificate.png
+08-https-endpoint.png
+09-http-redirect.png
+10-backend-health.png
+11-private-vm-no-external-ip.png
+12-cloud-nat.png
+13-mig.png
 ```
 
 ---
 
-## 23. Final Verification Statement
+## 28. Final Verification Statement
 
 The platform is verified when this statement is true:
 
 ```text
-A user can reach the application through the external HTTP Load Balancer, while the backend VM instances remain private, healthy, managed by a regional MIG, and able to reach outbound internet only through Cloud NAT.
+A user can reach the application through the external HTTP(S) Load Balancer, HTTPS works with a Google-managed SSL certificate, optional HTTP-to-HTTPS redirect works when enabled, and the backend VM instances remain private, healthy, managed by a regional MIG, and able to reach outbound internet only through Cloud NAT.
 ```

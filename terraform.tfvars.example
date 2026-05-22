@@ -91,3 +91,10 @@ mig_tags           = ["web-backend"]
 lb_name           = "web-lb"
 app_port          = 80
 health_check_path = "/healthz"
+
+# HTTPS configuration for V1.1
+# Enable only after you own a domain and can point DNS to the load balancer IP.
+
+enable_https                    = false
+enable_http_redirect            = false
+managed_ssl_certificate_domains = []

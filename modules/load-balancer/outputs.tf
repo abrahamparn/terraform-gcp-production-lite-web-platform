@@ -8,12 +8,37 @@ output "load_balancer_url" {
   value       = "http://${google_compute_global_address.this.address}"
 }
 
+output "https_url" {
+  description = "The HTTPS URL of the primary configured domain."
+  value       = var.enable_https && local.primary_domain != null ? "https://${local.primary_domain}" : null
+}
+
 output "backend_service_name" {
   description = "The backend service name."
   value       = google_compute_backend_service.this.name
 }
 
+output "http_forwarding_rule_name" {
+  description = "The HTTP forwarding rule name."
+  value       = google_compute_global_forwarding_rule.http.name
+}
+
+output "https_forwarding_rule_name" {
+  description = "The HTTPS forwarding rule name."
+  value       = try(google_compute_global_forwarding_rule.https[0].name, null)
+}
+
 output "forwarding_rule_name" {
   description = "The forwarding rule name."
   value       = google_compute_global_forwarding_rule.http.name
+}
+
+output "ssl_certificate_name" {
+  description = "The Google-managed SSL certificate name."
+  value       = try(google_compute_managed_ssl_certificate.this[0].name, null)
+}
+
+output "target_https_proxy_name" {
+  description = "The target HTTPS proxy name."
+  value       = try(google_compute_target_https_proxy.this[0].name, null)
 }

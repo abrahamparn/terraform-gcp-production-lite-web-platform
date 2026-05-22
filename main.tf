@@ -48,6 +48,12 @@ resource "google_compute_health_check" "http" {
   }
 }
 
+resource "time_sleep" "health_check_ready" {
+  create_duration = "30s"
+
+  depends_on = [google_compute_health_check.http]
+}
+
 module "compute" {
 
   source = "./modules/compute"
@@ -66,7 +72,10 @@ module "compute" {
   health_check_self_link = google_compute_health_check.http.self_link
   service_account_email  = module.iam.service_accounts["app"].email
 
-  depends_on = [module.nat]
+  depends_on = [
+    module.nat,
+    time_sleep.health_check_ready
+  ]
 }
 
 
@@ -77,6 +86,12 @@ module "load_balancer" {
   backend_instance_group = module.compute.mig_instance_group
   health_check_self_link = google_compute_health_check.http.self_link
   app_port               = var.app_port
+
+  enable_https                    = var.enable_https
+  enable_http_redirect            = var.enable_http_redirect
+  managed_ssl_certificate_domains = var.managed_ssl_certificate_domains
+
+  depends_on = [time_sleep.health_check_ready]
 }
 
 resource "google_project_iam_member" "iap_tunnel_user" {

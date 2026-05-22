@@ -18,28 +18,26 @@ The goal of this repository is not to build a full enterprise landing zone. The 
 
 Current version:
 
-> V1.0: Production Lite HTTP Web Platform
+> V1.1: HTTPS and Custom Domain
 
-this version focuses on:
+## V1.1 - HTTPS and Custom Domain
 
-```text
-VPC
-map-based subnets
-map-based firewall rules
-Cloud NAT
-custom service account
-regional Managed Instance Group
-instance template
-startup script
-HTTP health check
-backend service
-external HTTP load balancer
-remote state
-Terraform modules
-operational documentation
-```
+This version adds HTTPS support using a Google-managed SSL certificate
 
-HTTPS, custom domain, Cloud Armor, CI/CD, Cloud SQL, and Secret Manager will be added later versions.
+The load balancer now supports:
+
+- HTTPS on port 443
+- Custom Domain
+- Google-managed SSL Certificate
+- Optional HTTP to HTTPS redirect
+
+The backend architecture remains the same:
+
+- Private backend VMs
+- Regional MIG
+- Cloud NAT
+- Backend Service
+- Health Checks
 
 ## Why I created this
 
@@ -116,7 +114,10 @@ This version intentionally does not include:
 User
   |
   v
-External HTTP Load Balancer
+HTTPS Load Balancer on Port 443
+  |
+  v
+Target HTTPS Porxy
   |
   v
 Backend Service
@@ -135,10 +136,10 @@ Outbound Internet via Cloud NAT
 
 ```mermaid
 flowchart TD
-    User[User / Browser] --> LB[External HTTP Load Balancer]
+    User[User / Browser] --> LB[HTTPS Load Balancer]
 
     LB --> FR[Global Forwarding Rule]
-    FR --> Proxy[Target HTTP Proxy]
+    FR --> Proxy[Target HTTPS Proxy]
     Proxy --> URLMap[URL Map]
     URLMap --> Backend[Backend Service]
     Backend --> MIG[Regional Managed Instance Group]
@@ -515,6 +516,11 @@ mig_machine_type   = "e2-micro"
 mig_zones          = ["asia-southeast2-a"]
 mig_subnet_key     = "app"
 mig_tags           = ["web-backend"]
+
+# For v1.1
+enable_https                    = true
+enable_http_redirect            = true
+managed_ssl_certificate_domains = ["abrahampn.xyz", "www.abrahampn.xyz"]
 
 lb_name           = "web-lb"
 app_port          = 80
@@ -943,7 +949,7 @@ If you want to delete the state bucket, only do it after confirming no active in
 
 ### v1.0 — Production-Lite HTTP Platform
 
-Current version.
+Previous Version.
 
 Includes:
 
@@ -965,7 +971,9 @@ remote state
 
 ### v1.1 — HTTPS and Custom Domain
 
-Planned improvements:
+Current Version:
+
+Added:
 
 ```text
 Google-managed SSL certificate

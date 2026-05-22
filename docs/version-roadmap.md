@@ -2,6 +2,8 @@
 
 ## v1.0 — Production-Lite HTTP Platform
 
+Status: Completed
+
 - VPC
 - map-based subnets
 - map-based firewall rules
@@ -17,6 +19,8 @@
 - verification docs
 
 ## v1.1 — HTTPS and Custom Domain
+
+Status: Completed
 
 - Google-managed SSL certificate
 - custom domain

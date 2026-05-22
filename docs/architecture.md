@@ -23,7 +23,8 @@ Instance template
 Startup script
 HTTP health check
 Backend service
-External HTTP Load Balancer
+External HTTP(S) Load Balancer
+Google-managed SSL certificate
 Remote Terraform state
 ```
 
@@ -34,7 +35,7 @@ private backend instances
 + Managed Instance Group
 + Cloud NAT
 + health checks
-+ external HTTP Load Balancer
++ external HTTP(S) Load Balancer
 + modular Terraform
 ```
 
@@ -46,7 +47,7 @@ private backend instances
 User
   |
   v
-External HTTP Load Balancer
+External HTTP(S) Load Balancer
   |
   v
 Backend Service
@@ -63,7 +64,7 @@ Outbound Internet through Cloud NAT
 
 The backend VM instances do not have external IP addresses.
 
-Inbound user traffic enters through the external HTTP Load Balancer. Outbound internet access from the private VM instances is handled through Cloud NAT.
+Inbound user traffic enters through the external HTTP(S) Load Balancer. Outbound internet access from the private VM instances is handled through Cloud NAT.
 
 ---
 
@@ -71,13 +72,21 @@ Inbound user traffic enters through the external HTTP Load Balancer. Outbound in
 
 ```mermaid
 flowchart TD
-    User[User / Browser] --> LB[External HTTP Load Balancer]
+    User[User / Browser] --> HTTPFR[Global Forwarding Rule :80]
+    User --> HTTPSFR[Global Forwarding Rule :443]
 
-    LB --> FR[Global Forwarding Rule]
-    FR --> Proxy[Target HTTP Proxy]
-    Proxy --> URLMap[URL Map]
+    HTTPFR --> HTTPProxy[Target HTTP Proxy]
+    HTTPSFR --> HTTPSProxy[Target HTTPS Proxy]
+    Cert[Google-managed SSL Certificate] --> HTTPSProxy
+
+    HTTPProxy --> URLMap[Shared App URL Map]
+    HTTPSProxy --> URLMap
     URLMap --> Backend[Backend Service]
     Backend --> MIG[Regional Managed Instance Group]
+
+    HTTPFR -. optional redirect .-> RedirectProxy[Redirect HTTP Proxy]
+    RedirectProxy -.-> RedirectMap[Redirect URL Map]
+    RedirectMap -. redirects to HTTPS .-> HTTPSFR
 
     MIG --> VM1[Private App VM 1]
     MIG --> VM2[Private App VM 2]
@@ -110,24 +119,29 @@ flowchart TD
 
 ## 4. Main Components
 
-| Component              | Purpose                                                 |
-| ---------------------- | ------------------------------------------------------- |
-| VPC                    | Provides the isolated network boundary for the platform |
-| App subnet             | Hosts the application VM instances                      |
-| DB subnet              | Reserved for future database tier                       |
-| Firewall rules         | Controls ingress access to backend instances            |
-| Cloud Router           | Required dependency for Cloud NAT                       |
-| Cloud NAT              | Provides outbound internet access for private VMs       |
-| Service account        | Runtime identity for application VMs                    |
-| Instance template      | Defines how application VMs are created                 |
-| Regional MIG           | Manages the application VM instances                    |
-| HTTP health check      | Determines whether backend instances are healthy        |
-| Backend service        | Connects load balancer to the MIG                       |
-| URL map                | Routes HTTP traffic to backend service                  |
-| Target HTTP proxy      | Receives HTTP traffic from forwarding rule              |
-| Global forwarding rule | Public HTTP listener                                    |
-| Global IP address      | External entry point for users                          |
-| GCS backend            | Stores Terraform remote state                           |
+| Component                    | Purpose                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| VPC                          | Provides the isolated network boundary for the platform |
+| App subnet                   | Hosts the application VM instances                      |
+| DB subnet                    | Reserved for future database tier                       |
+| Firewall rules               | Controls ingress access to backend instances            |
+| Cloud Router                 | Required dependency for Cloud NAT                       |
+| Cloud NAT                    | Provides outbound internet access for private VMs       |
+| Service account              | Runtime identity for application VMs                    |
+| Instance template            | Defines how application VMs are created                 |
+| Regional MIG                 | Manages the application VM instances                    |
+| HTTP health check            | Determines whether backend instances are healthy        |
+| Backend service              | Connects load balancer to the MIG                       |
+| URL map                      | Routes application traffic to the backend service       |
+| Target HTTP proxy            | Receives HTTP traffic from the port 80 forwarding rule  |
+| Target HTTPS proxy           | Terminates TLS and sends HTTPS traffic to the URL map   |
+| Google-managed SSL cert      | Issues and renews certificates for configured domains   |
+| Redirect HTTP proxy          | Optional port 80 proxy used only for HTTPS redirects    |
+| Redirect URL map             | Optional redirect-only URL map for HTTP-to-HTTPS        |
+| Global forwarding rule :80   | Public HTTP listener                                    |
+| Global forwarding rule :443  | Public HTTPS listener                                   |
+| Global IP address            | External entry point for users                          |
+| GCS backend                  | Stores Terraform remote state                           |
 
 ---
 
@@ -283,7 +297,7 @@ This means the backend VMs only receive internal IP addresses.
 
 They cannot be reached directly from the public internet.
 
-User traffic must enter through the external HTTP Load Balancer.
+User traffic must enter through the external HTTP(S) Load Balancer.
 
 ---
 
@@ -379,29 +393,93 @@ This separation makes backend health easier to reason about.
 
 ## 12. Load Balancer Design
 
-The external HTTP Load Balancer provides the public entry point.
+The external HTTP(S) Load Balancer provides the public entry point.
 
 The load balancer stack includes:
 
 ```text
 global external IP address
-global forwarding rule
+global forwarding rule on port 80
+global forwarding rule on port 443 when HTTPS is enabled
 target HTTP proxy
+target HTTPS proxy when HTTPS is enabled
 URL map
 backend service
 health check
 MIG backend
 ```
 
-The public listener is HTTP on port 80.
+The public HTTP listener is port 80.
 
-In v1.0, HTTPS is intentionally not included.
+When HTTPS is enabled, the public HTTPS listener is port 443.
 
-HTTPS will be added in v1.1.
+The application URL map and backend service remain shared between HTTP and HTTPS traffic.
 
 ---
 
-## 13. Runtime Application
+## 13. HTTPS Architecture
+
+v1.1 adds HTTPS without changing the backend application path.
+
+The HTTPS path is:
+
+```text
+User
+-> Global forwarding rule on port 443
+-> Target HTTPS proxy
+-> Shared app URL map
+-> Shared backend service
+-> Regional MIG
+-> Private application VMs
+```
+
+The target HTTPS proxy uses a Google-managed SSL certificate.
+
+The certificate domains come from:
+
+```hcl
+managed_ssl_certificate_domains = [
+  "abrahampn.xyz",
+  "www.abrahampn.xyz"
+]
+```
+
+Google manages certificate issuance and renewal, but certificate activation still depends on public DNS. Each configured domain must resolve to the load balancer global IP address.
+
+For example:
+
+```text
+abrahampn.xyz      A     <load-balancer-ip>
+www.abrahampn.xyz  A     <load-balancer-ip>
+```
+
+HTTPS does not require a separate application backend service.
+
+The shared application routing path is intentionally:
+
+```text
+Target HTTP proxy  -> Shared app URL map -> Shared backend service
+Target HTTPS proxy -> Shared app URL map -> Shared backend service
+```
+
+This keeps HTTP and HTTPS behavior consistent and avoids duplicating routing or backend configuration.
+
+When `enable_http_redirect` is true, Terraform creates a separate redirect URL map and redirect HTTP proxy for port 80. That redirect-only path sends clients to HTTPS and does not replace the shared app URL map used by HTTPS traffic.
+
+The recommended rollout order is:
+
+```text
+1. Create the load balancer and global IP.
+2. Point DNS records at the global IP.
+3. Enable HTTPS and wait for the managed certificate to become active.
+4. Enable HTTP-to-HTTPS redirect after HTTPS is working.
+```
+
+Terraform also waits briefly after creating the health check before attaching it to GCP resources that consume it. This avoids a Compute API race where the health check exists but is not ready for backend service attachment yet.
+
+---
+
+## 14. Runtime Application
 
 The application is intentionally simple.
 
@@ -440,7 +518,7 @@ The application is not the main focus. The infrastructure pattern is the focus.
 
 ---
 
-## 14. IAM Design
+## 15. IAM Design
 
 The application VM instances use a dedicated service account.
 
@@ -470,7 +548,7 @@ roles/iam.serviceAccountUser
 
 ---
 
-## 15. Remote State Design
+## 16. Remote State Design
 
 Terraform state is stored in Google Cloud Storage.
 
@@ -497,12 +575,15 @@ cp backend.tf.example backend.tf
 
 ---
 
-## 16. Current Scope
+## 17. Current Scope
 
-v1.0 includes:
+Current v1.1 scope includes:
 
 ```text
-HTTP only
+HTTP and HTTPS entry points
+Google-managed SSL certificate
+custom domain support
+optional HTTP-to-HTTPS redirect
 private backend VMs
 MIG
 Cloud NAT
@@ -513,11 +594,9 @@ remote state
 modular Terraform
 ```
 
-v1.0 does not include:
+Current v1.1 scope does not include:
 
 ```text
-HTTPS
-custom domain
 Cloud Armor
 Cloud SQL
 Secret Manager
@@ -530,18 +609,18 @@ Those features are deferred to later versions.
 
 ---
 
-## 17. Future Architecture Roadmap
+## 18. Architecture Roadmap
 
 ### v1.1 — HTTPS and Custom Domain
 
-Planned additions:
+Included additions:
 
 ```text
 Google-managed SSL certificate
 custom domain
 HTTPS target proxy
 global forwarding rule on port 443
-HTTP-to-HTTPS redirect
+optional HTTP-to-HTTPS redirect
 ```
 
 ### v1.2 — Security Hardening
@@ -579,13 +658,14 @@ application configuration loading
 
 ---
 
-## 18. Architecture Summary
+## 19. Architecture Summary
 
 This platform demonstrates the following design principle:
 
 ```text
 Application backends should not be directly exposed to the internet.
 Traffic should enter through a controlled entry point.
+TLS should terminate at the load balancer edge.
 Private workloads should use NAT for outbound access.
 Infrastructure should be reproducible through Terraform.
 ```
@@ -593,11 +673,12 @@ Infrastructure should be reproducible through Terraform.
 The key pattern is:
 
 ```text
-External HTTP Load Balancer
--> Backend Service
+External HTTP(S) Load Balancer
+-> Shared URL Map
+-> Shared Backend Service
 -> Regional MIG
 -> Private App VMs
 -> Cloud NAT for outbound access
 ```
 
-This is the core production-lite web platform pattern for v1.0.
+This is the core production-lite web platform pattern for v1.1.

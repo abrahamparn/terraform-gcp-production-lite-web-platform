@@ -64,22 +64,56 @@ output "curl_health_check_command" {
   value       = "curl -i ${module.load_balancer.load_balancer_url}${var.health_check_path}"
 }
 
+output "https_enabled" {
+  description = "Whether HTTPS is enabled."
+  value       = var.enable_https
+}
+
+output "http_redirect_enabled" {
+  description = "Whether HTTP requests are redirected to HTTPS."
+  value       = var.enable_https && var.enable_http_redirect
+}
+
+output "managed_ssl_certificate_domains" {
+  description = "Domains configured for the Google-managed SSL certificate."
+  value       = var.managed_ssl_certificate_domains
+}
+
+output "https_url" {
+  description = "The HTTPS URL for the primary configured domain."
+  value       = module.load_balancer.https_url
+}
+
+output "ssl_certificate_name" {
+  description = "Google-managed SSL certificate name."
+  value       = module.load_balancer.ssl_certificate_name
+}
+
+output "https_forwarding_rule_name" {
+  description = "HTTPS forwarding rule name."
+  value       = module.load_balancer.https_forwarding_rule_name
+}
+
 output "platform_summary" {
   description = "Summary of the production lite platform."
 
   value = {
-    project           = var.project_id
-    environment       = var.environment
-    region            = var.region
-    network_name      = module.network.network_name
-    mig_name          = module.compute.mig_name
-    mig_size          = var.mig_instance_count
-    app_port          = var.app_port
-    health_check_path = var.health_check_path
-    cloud_nat         = module.nat.nat_name
-    health_check      = google_compute_health_check.http.name
-    load_balancer_ip  = module.load_balancer.load_balancer_ip
-    load_balancer_url = module.load_balancer.load_balancer_url
+    project                    = var.project_id
+    environment                = var.environment
+    region                     = var.region
+    network_name               = module.network.network_name
+    mig_name                   = module.compute.mig_name
+    mig_size                   = var.mig_instance_count
+    app_port                   = var.app_port
+    health_check_path          = var.health_check_path
+    cloud_nat                  = module.nat.nat_name
+    health_check               = google_compute_health_check.http.name
+    load_balancer_ip           = module.load_balancer.load_balancer_ip
+    load_balancer_url          = module.load_balancer.load_balancer_url
+    http_redirect_enabled      = var.enable_https && var.enable_http_redirect
+    https_url                  = module.load_balancer.https_url
+    https_forwarding_rule_name = module.load_balancer.https_forwarding_rule_name
+    ssl_certificate_domains    = var.managed_ssl_certificate_domains
   }
 
 }

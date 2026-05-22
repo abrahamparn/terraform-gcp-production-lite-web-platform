@@ -27,3 +27,15 @@ HTTPS is intentionally deferred to v1.1. The v1.0 objective is to prove core pla
 ## Decision 7 — Reserve a DB subnet without provisioning a database
 
 The DB subnet demonstrates tiered network design. A database is intentionally not provisioned in v1.0 because the artifact focuses on web platform infrastructure.
+
+## Decision 8 - Add HTTPS in v1.1
+
+add https because real public web platform should not rely on plain http for user traffic
+
+## Decision 9 - use google managed ssl certificate
+
+I Use google managed ssl certificate because google provisions and renew it themselves.
+
+## Decision 10 - Use the same global ip for http and https
+
+this keeps DNS simple and allow http to https redirect to work cleanly

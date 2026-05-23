@@ -25,6 +25,8 @@ HTTP health check
 Backend service
 External HTTP(S) Load Balancer
 Google-managed SSL certificate
+Cloud Armor backend security policy
+Load balancer request logging
 Remote Terraform state
 ```
 
@@ -50,7 +52,7 @@ User
 External HTTP(S) Load Balancer
   |
   v
-Backend Service
+Backend Service with optional Cloud Armor policy
   |
   v
 Regional Managed Instance Group
@@ -82,6 +84,8 @@ flowchart TD
     HTTPProxy --> URLMap[Shared App URL Map]
     HTTPSProxy --> URLMap
     URLMap --> Backend[Backend Service]
+    Armor[Cloud Armor Backend Security Policy] -. optional attachment .-> Backend
+    Logs[Load Balancer Request Logs] -. policy evaluation evidence .-> Backend
     Backend --> MIG[Regional Managed Instance Group]
 
     HTTPFR -. optional redirect .-> RedirectProxy[Redirect HTTP Proxy]
@@ -132,6 +136,8 @@ flowchart TD
 | Regional MIG                 | Manages the application VM instances                    |
 | HTTP health check            | Determines whether backend instances are healthy        |
 | Backend service              | Connects load balancer to the MIG                       |
+| Cloud Armor policy           | Optionally filters requests at the backend service       |
+| Backend request logging      | Captures policy evaluation evidence for review           |
 | URL map                      | Routes application traffic to the backend service       |
 | Target HTTP proxy            | Receives HTTP traffic from the port 80 forwarding rule  |
 | Target HTTPS proxy           | Terminates TLS and sends HTTPS traffic to the URL map   |
@@ -479,7 +485,34 @@ Terraform also waits briefly after creating the health check before attaching it
 
 ---
 
-## 14. Runtime Application
+## 14. Security Hardening Architecture
+
+v1.2 adds a Cloud Armor backend security policy without changing the existing HTTPS frontend or application routing path.
+
+```text
+User request
+-> Existing HTTP(S) frontend and URL map
+-> Shared backend service with Cloud Armor policy attached
+-> Existing regional MIG
+-> Private application VMs
+```
+
+The policy is attached to the existing backend service. No additional URL map, target HTTPS proxy, forwarding rule, or MIG is required.
+
+The initial rollout configuration uses:
+
+```text
+default allow rule at priority 2147483647
+custom deny or WAF rules with explicit priorities
+preview mode for newly introduced WAF rules
+backend request logging enabled during policy observation
+```
+
+Cloud Armor logs are emitted through load balancer request logging. Keeping full sampling during the preview window allows denied and preview matches to be inspected before enforcement decisions are made.
+
+---
+
+## 15. Runtime Application
 
 The application is intentionally simple.
 
@@ -518,7 +551,7 @@ The application is not the main focus. The infrastructure pattern is the focus.
 
 ---
 
-## 15. IAM Design
+## 16. IAM Design
 
 The application VM instances use a dedicated service account.
 
@@ -548,7 +581,7 @@ roles/iam.serviceAccountUser
 
 ---
 
-## 16. Remote State Design
+## 17. Remote State Design
 
 Terraform state is stored in Google Cloud Storage.
 
@@ -575,15 +608,17 @@ cp backend.tf.example backend.tf
 
 ---
 
-## 17. Current Scope
+## 18. Current Scope
 
-Current v1.1 scope includes:
+Current v1.2 Terraform scope includes:
 
 ```text
 HTTP and HTTPS entry points
 Google-managed SSL certificate
 custom domain support
 optional HTTP-to-HTTPS redirect
+optional Cloud Armor backend security policy
+backend request logging configuration
 private backend VMs
 MIG
 Cloud NAT
@@ -594,10 +629,9 @@ remote state
 modular Terraform
 ```
 
-Current v1.1 scope does not include:
+Current v1.2 scope does not include:
 
 ```text
-Cloud Armor
 Cloud SQL
 Secret Manager
 CI/CD
@@ -609,7 +643,7 @@ Those features are deferred to later versions.
 
 ---
 
-## 18. Architecture Roadmap
+## 19. Architecture Roadmap
 
 ### v1.1 — HTTPS and Custom Domain
 
@@ -625,12 +659,13 @@ optional HTTP-to-HTTPS redirect
 
 ### v1.2 — Security Hardening
 
-Planned additions:
+Implemented in Terraform; deployment requires a reviewed plan and verification:
 
 ```text
-Cloud Armor
-stronger firewall posture
-edge security policy documentation
+Cloud Armor backend security policy
+backend service policy attachment
+load balancer request logging
+policy rollout and verification documentation
 ```
 
 ### v2.0 — Terraform CI/CD
@@ -658,7 +693,7 @@ application configuration loading
 
 ---
 
-## 19. Architecture Summary
+## 20. Architecture Summary
 
 This platform demonstrates the following design principle:
 

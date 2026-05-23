@@ -15,6 +15,8 @@ DNS records
 Google-managed SSL certificate
 HTTPS response
 HTTP-to-HTTPS redirect
+Cloud Armor security policy
+backend request logging
 application endpoints
 VPC and subnet creation
 firewall rules
@@ -42,6 +44,8 @@ The platform is considered successfully deployed when:
 [ ] HTTPS certificate is active when HTTPS is enabled
 [ ] HTTPS endpoint works when HTTPS is enabled
 [ ] HTTP redirects to HTTPS when redirect is enabled
+[ ] Cloud Armor policy is attached when Cloud Armor is enabled
+[ ] Backend request logging is enabled during Cloud Armor verification
 [ ] VPC exists
 [ ] App subnet exists
 [ ] DB subnet exists
@@ -86,6 +90,12 @@ managed_ssl_certificate_domains
 https_url
 ssl_certificate_name
 https_forwarding_rule_name
+backend_service_name
+cloud_armor_enabled
+cloud_armor_policy_name
+cloud_armor_policy_self_link
+backend_logging_enabled
+backend_log_sample_rate
 platform_summary
 ```
 
@@ -697,8 +707,10 @@ gcloud compute backend-services list --global
 Describe backend service:
 
 ```bash
+terraform output -raw backend_service_name
 gcloud compute backend-services describe BACKEND_SERVICE_NAME \
-  --global
+  --global \
+  --format="yaml(name,protocol,loadBalancingScheme,portName,healthChecks,backends,securityPolicy,logConfig)"
 ```
 
 Check:
@@ -709,11 +721,59 @@ load balancing scheme: EXTERNAL_MANAGED
 port name: http
 health check attached
 backend group points to MIG instance group
+securityPolicy points to the Cloud Armor policy when enabled
+logConfig.enable is true during Cloud Armor policy verification
+logConfig.sampleRate is 1.0 during the initial observation window
 ```
 
 ---
 
-## 20. Verify Backend Health
+## 20. Verify Cloud Armor And Request Logging
+
+Use this section when `enable_cloud_armor = true`.
+
+Get the managed policy name:
+
+```bash
+terraform output -raw cloud_armor_policy_name
+```
+
+Describe the policy:
+
+```bash
+gcloud compute security-policies describe POLICY_NAME
+```
+
+Check:
+
+```text
+custom rules have distinct priorities
+new WAF rules show preview: true during observation
+default rule has priority 2147483647 and action: allow
+```
+
+Review request logs after sending normal application requests and selected test requests:
+
+```bash
+gcloud logging read \
+  'resource.type="http_load_balancer" AND (jsonPayload.enforcedSecurityPolicy.name="POLICY_NAME" OR jsonPayload.previewSecurityPolicy.name="POLICY_NAME")' \
+  --limit=20 \
+  --format=json
+```
+
+Check:
+
+```text
+jsonPayload.enforcedSecurityPolicy reports enforced matches
+jsonPayload.previewSecurityPolicy reports preview matches
+normal HTTPS requests are not unexpectedly denied
+```
+
+Keep new WAF rules in preview mode until log review establishes that expected traffic is not matched incorrectly.
+
+---
+
+## 21. Verify Backend Health
 
 Run:
 
@@ -740,7 +800,7 @@ check startup logs
 
 ---
 
-## 21. Verify Global Forwarding Rules
+## 22. Verify Global Forwarding Rules
 
 List:
 
@@ -768,7 +828,7 @@ load balancing scheme is EXTERNAL_MANAGED
 
 ---
 
-## 22. Verify Target Proxies
+## 23. Verify Target Proxies
 
 Verify the HTTP proxy:
 
@@ -801,7 +861,7 @@ If HTTP-to-HTTPS redirect is enabled, verify the redirect HTTP proxy points to t
 
 ---
 
-## 23. Verify Backend VMs Have No External IP
+## 24. Verify Backend VMs Have No External IP
 
 List instances:
 
@@ -827,7 +887,7 @@ This confirms that backend instances are private.
 
 ---
 
-## 24. Verify IAP SSH
+## 25. Verify IAP SSH
 
 SSH into a backend instance:
 
@@ -860,7 +920,7 @@ exit
 
 ---
 
-## 25. Verify Application Service
+## 26. Verify Application Service
 
 Inside the VM:
 
@@ -888,7 +948,7 @@ sudo journalctl -u google-startup-scripts.service --no-pager -n 100
 
 ---
 
-## 26. Verify Outbound Internet from Private VM
+## 27. Verify Outbound Internet from Private VM
 
 Inside the VM:
 
@@ -915,7 +975,7 @@ check VM subnet
 
 ---
 
-## 27. Verification Evidence for Portfolio
+## 28. Verification Evidence for Portfolio
 
 Capture screenshots or terminal output for:
 
@@ -961,10 +1021,10 @@ Suggested filenames:
 
 ---
 
-## 28. Final Verification Statement
+## 29. Final Verification Statement
 
 The platform is verified when this statement is true:
 
 ```text
-A user can reach the application through the external HTTP(S) Load Balancer, HTTPS works with a Google-managed SSL certificate, optional HTTP-to-HTTPS redirect works when enabled, and the backend VM instances remain private, healthy, managed by a regional MIG, and able to reach outbound internet only through Cloud NAT.
+A user can reach the application through the external HTTP(S) Load Balancer, HTTPS works with a Google-managed SSL certificate, optional HTTP-to-HTTPS redirect works when enabled, Cloud Armor policy behavior is observable through backend request logging when enabled, and the backend VM instances remain private, healthy, managed by a regional MIG, and able to reach outbound internet only through Cloud NAT.
 ```

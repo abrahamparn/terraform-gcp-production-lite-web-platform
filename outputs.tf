@@ -54,6 +54,11 @@ output "load_balancer_url" {
   value       = module.load_balancer.load_balancer_url
 }
 
+output "backend_service_name" {
+  description = "Load balancer backend service name."
+  value       = module.load_balancer.backend_service_name
+}
+
 output "curl_test_command" {
   description = "Command to test the load balancer root endpoint."
   value       = "curl -i ${module.load_balancer.load_balancer_url}"
@@ -94,6 +99,31 @@ output "https_forwarding_rule_name" {
   value       = module.load_balancer.https_forwarding_rule_name
 }
 
+output "cloud_armor_enabled" {
+  description = "Whether Cloud Armor is enabled."
+  value       = var.enable_cloud_armor
+}
+
+output "cloud_armor_policy_name" {
+  description = "Cloud Armor security policy name."
+  value       = module.security.security_policy_name
+}
+
+output "cloud_armor_policy_self_link" {
+  description = "Cloud Armor security policy self-link."
+  value       = module.security.security_policy_self_link
+}
+
+output "backend_logging_enabled" {
+  description = "Whether backend service request logging is enabled."
+  value       = var.enable_backend_logging
+}
+
+output "backend_log_sample_rate" {
+  description = "Backend service log sampling rate."
+  value       = var.backend_log_sample_rate
+}
+
 output "platform_summary" {
   description = "Summary of the production lite platform."
 
@@ -114,6 +144,11 @@ output "platform_summary" {
     https_url                  = module.load_balancer.https_url
     https_forwarding_rule_name = module.load_balancer.https_forwarding_rule_name
     ssl_certificate_domains    = var.managed_ssl_certificate_domains
+    backend_service_name       = module.load_balancer.backend_service_name
+    cloud_armor_enabled        = var.enable_cloud_armor
+    cloud_armor_policy         = module.security.security_policy_name
+    backend_logging_enabled    = var.enable_backend_logging
+    backend_log_sample_rate    = var.backend_log_sample_rate
   }
 
 }

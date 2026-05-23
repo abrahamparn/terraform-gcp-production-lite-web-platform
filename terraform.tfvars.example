@@ -98,3 +98,52 @@ health_check_path = "/healthz"
 enable_https                    = false
 enable_http_redirect            = false
 managed_ssl_certificate_domains = []
+
+
+# Security hardening configuration for v1.2
+enable_cloud_armor              = false
+cloud_armor_policy_name         = "web-security-policy"
+cloud_armor_default_rule_action = "allow"
+enable_backend_logging          = true
+backend_log_sample_rate         = 1.0
+cloud_armor_rules               = {}
+
+# Example v1.2 Cloud Armor configuration.
+# Start WAF rules in preview mode before enforcing them.
+# Copy this into terraform.tfvars and set enable_cloud_armor = true when ready.
+
+# enable_cloud_armor = true
+# cloud_armor_rules = {
+#   deny-sqlmap-user-agent = {
+#     priority    = 1000
+#     action      = "deny(403)"
+#     description = "Deny obvious sqlmap scanner traffic by User-Agent."
+#     preview     = true
+#
+#     match = {
+#       expression = "has(request.headers['user-agent']) && request.headers['user-agent'].contains('sqlmap')"
+#     }
+#   }
+#
+#   waf-sqli-preview = {
+#     priority    = 1100
+#     action      = "deny(403)"
+#     description = "Preview SQL injection WAF rule before enforcement."
+#     preview     = true
+#
+#     match = {
+#       expression = "evaluatePreconfiguredWaf('sqli-v33-stable', {'sensitivity': 1})"
+#     }
+#   }
+#
+#   waf-xss-preview = {
+#     priority    = 1200
+#     action      = "deny(403)"
+#     description = "Preview XSS WAF rule before enforcement."
+#     preview     = true
+#
+#     match = {
+#       expression = "evaluatePreconfiguredWaf('xss-v33-stable', {'sensitivity': 1})"
+#     }
+#   }
+# }

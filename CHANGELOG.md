@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - v1.2 Security Hardening
+
+### Added
+
+- optional Cloud Armor backend security policy attached to the existing backend service
+- backend request logging configuration for Cloud Armor preview and enforcement verification
+- Cloud Armor configuration variables, outputs, and operational verification documentation
+
+### Changed
+
+- validated Cloud Armor actions, unique rule priorities, and exclusive match configuration
+- retained the existing HTTPS URL map and backend path while adding security policy attachment
+
 ## [v1.1.0] - 22 May 2026
 
 ### Added

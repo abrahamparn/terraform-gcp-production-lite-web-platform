@@ -30,10 +30,12 @@ Status: Completed
 
 ## v1.2 — Security Hardening
 
-- Cloud Armor
-- stricter firewall posture
-- logging notes
-- security design decisions
+Status: Completed
+
+- Cloud Armor backend security policy
+- backend service policy attachment
+- load balancer request logging for policy evaluation
+- security rollout and verification documentation
 
 ## v2.0 — Terraform CI/CD
 

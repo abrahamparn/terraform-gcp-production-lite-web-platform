@@ -42,3 +42,19 @@ output "target_https_proxy_name" {
   description = "The target HTTPS proxy name."
   value       = try(google_compute_target_https_proxy.this[0].name, null)
 }
+
+
+output "backend_logging_enabled" {
+  description = "Whether backend service request logging is enabled."
+  value       = var.enable_backend_logging
+}
+
+output "backend_log_sample_rate" {
+  description = "Backend service log sampling rate."
+  value       = var.backend_log_sample_rate
+}
+
+output "attached_security_policy" {
+  description = "Cloud Armor security policy attached to the backend service."
+  value       = var.security_policy_self_link
+}

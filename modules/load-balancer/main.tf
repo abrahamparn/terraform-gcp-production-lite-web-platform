@@ -17,6 +17,8 @@ resource "google_compute_backend_service" "this" {
   load_balancing_scheme = "EXTERNAL_MANAGED"
   timeout_sec           = 30
 
+  security_policy = var.security_policy_self_link
+
   health_checks = [
     var.health_check_self_link
   ]
@@ -25,6 +27,11 @@ resource "google_compute_backend_service" "this" {
     group           = var.backend_instance_group
     balancing_mode  = "UTILIZATION"
     capacity_scaler = 1.0
+  }
+
+  log_config {
+    enable      = var.enable_backend_logging
+    sample_rate = var.backend_log_sample_rate
   }
 }
 

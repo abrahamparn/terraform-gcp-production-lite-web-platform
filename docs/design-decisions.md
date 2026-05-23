@@ -39,3 +39,23 @@ I Use google managed ssl certificate because google provisions and renew it them
 ## Decision 10 - Use the same global ip for http and https
 
 this keeps DNS simple and allow http to https redirect to work cleanly
+
+## Decision 11 — Add Cloud Armor in v1.2
+
+v1.2 introduces Cloud Armor as the first edge security layer for the public load balancer.
+
+## Decision 12 — Use preview mode for WAF rules
+
+SQLi and XSS WAF rules are initially deployed in preview mode. This allows the platform to observe potential matches without blocking legitimate traffic. The goal is to avoid breaking the application with aggressive rules before logs are reviewed.
+
+## Decision 13 — Keep default action as allow
+
+The default Cloud Armor rule remains allow in v1.2. This is intentional because the project is a public web platform and should not become deny-by-default until explicit allowlist
+
+## Decision 14 — Remove broad internal firewall access
+
+v1.2 tightens this posture by keeping only required ingress paths
+
+## Decision 15 — Enable backend logging
+
+Backend service logging is enabled so Cloud Armor decisions and load balancer requests can be reviewed in Cloud Logging.

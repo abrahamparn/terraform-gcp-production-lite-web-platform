@@ -219,3 +219,102 @@ variable "managed_ssl_certificate_domains" {
     error_message = "Each managed SSL certificate domain must be a non-empty string."
   }
 }
+
+
+variable "enable_cloud_armor" {
+  description = "Whether to create and attach a Cloud Armor security policy."
+  type        = bool
+  default     = false
+}
+
+variable "cloud_armor_policy_name" {
+  description = "Base name for the Cloud Armor security policy."
+  type        = string
+  default     = "web-security-policy"
+
+  validation {
+    condition     = can(regex("^[a-z]([-a-z0-9]*[a-z0-9])?$", var.cloud_armor_policy_name))
+    error_message = "cloud_armor_policy_name must use lowercase letters, numbers, and hyphens."
+  }
+}
+
+variable "cloud_armor_default_rule_action" {
+  description = "Default Cloud Armor action for requests that match no custom rule."
+  type        = string
+  default     = "allow"
+
+  validation {
+    condition     = contains(["allow", "deny(403)", "deny(404)", "deny(502)"], var.cloud_armor_default_rule_action)
+    error_message = "cloud_armor_default_rule_action must be one of: allow, deny(403), deny(404), deny(502)."
+  }
+}
+
+variable "cloud_armor_rules" {
+  description = "Map of Cloud Armor security policy rules. Use preview = true for new WAF rules before enforcement."
+
+  type = map(object({
+    priority    = number
+    action      = string
+    description = optional(string)
+    preview     = optional(bool, false)
+
+    match = object({
+      expression    = optional(string)
+      src_ip_ranges = optional(list(string))
+    })
+  }))
+
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for rule in values(var.cloud_armor_rules) :
+      rule.priority > 0 && rule.priority < 2147483647
+    ])
+    error_message = "Each Cloud Armor rule priority must be greater than 0 and less than 2147483647."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in values(var.cloud_armor_rules) :
+      contains(["allow", "deny(403)", "deny(404)", "deny(502)"], rule.action)
+    ])
+    error_message = "Each Cloud Armor rule action must be one of: allow, deny(403), deny(404), deny(502)."
+  }
+
+  validation {
+    condition = length(distinct([
+      for rule in values(var.cloud_armor_rules) : rule.priority
+    ])) == length(var.cloud_armor_rules)
+    error_message = "Each Cloud Armor rule priority must be unique."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in values(var.cloud_armor_rules) :
+      (
+        try(length(trimspace(rule.match.expression)) > 0, false) && rule.match.src_ip_ranges == null
+        ) || (
+        rule.match.expression == null && try(length(rule.match.src_ip_ranges) > 0 && length(rule.match.src_ip_ranges) <= 10, false)
+      )
+    ])
+    error_message = "Each Cloud Armor rule must use exactly one non-empty match type: expression or 1 to 10 src_ip_ranges."
+  }
+}
+
+variable "enable_backend_logging" {
+  description = "Whether to enable backend service request logging. Cloud Armor logs are part of load balancer logs."
+  type        = bool
+  default     = true
+}
+
+variable "backend_log_sample_rate" {
+  description = "Backend service log sampling rate. Use 1.0 for learning and verification, lower values for cost control."
+  type        = number
+  default     = 1.0
+
+  validation {
+    condition     = var.backend_log_sample_rate >= 0 && var.backend_log_sample_rate <= 1
+    error_message = "backend_log_sample_rate must be between 0 and 1."
+  }
+}

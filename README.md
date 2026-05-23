@@ -6,11 +6,13 @@ This project provisions a small but production-shaped application infrastructure
 
 1. Private backend virtual machines inside a Managed Instance Group,
 2. Outbound internet access through Cloud NAT,
-3. An external HTTP Load Balancer,
-4. Health checks,
-5. Firewall rules,
-6. Service accounts, and
-7. Remote Terraform state
+3. An external HTTP(S) Load Balancer,
+4. Google-managed HTTPS certificates,
+5. Optional Cloud Armor backend security policy,
+6. Health checks,
+7. Firewall rules,
+8. Service accounts, and
+9. Remote Terraform state
 
 The goal of this repository is not to build a full enterprise landing zone. The goal is to demonstrate that application infrastructure can be created in a clean, modular, repeatable, and operationally understandable way using Terraform.
 
@@ -18,7 +20,7 @@ The goal of this repository is not to build a full enterprise landing zone. The 
 
 Current version:
 
-> V1.1: HTTPS and Custom Domain
+> V1.2: Security Hardening
 
 ## V1.1 - HTTPS and Custom Domain
 
@@ -38,6 +40,12 @@ The backend architecture remains the same:
 - Cloud NAT
 - Backend Service
 - Health Checks
+
+## V1.2 - Security Hardening
+
+This version adds an optional Cloud Armor backend security policy to the existing backend service and enables load balancer request logging configuration for policy verification.
+
+The HTTP(S) frontend, URL map, backend service, and regional MIG remain shared. New WAF rules should begin in preview mode and be reviewed in request logs before enforcement.
 
 ## Why I created this
 
@@ -96,9 +104,6 @@ I understand how to provision application infrastructure using Terraform, includ
 
 This version intentionally does not include:
 
-- HTTPS
-- custom domain
-- Cloud Armor
 - Cloud SQL
 - Secret Manager
 - CI/CD
@@ -971,7 +976,7 @@ remote state
 
 ### v1.1 — HTTPS and Custom Domain
 
-Current Version:
+Previous Version:
 
 Added:
 
@@ -985,13 +990,13 @@ HTTP-to-HTTPS redirect
 
 ### v1.2 — Security Hardening
 
-Planned improvements:
+Current Version; implemented in Terraform and pending deployment verification:
 
 ```text
-Cloud Armor
-stricter firewall posture
-security policy documentation
-logging improvements
+Cloud Armor backend security policy
+backend service policy attachment
+load balancer request logging
+security policy rollout and verification documentation
 ```
 
 ### v2.0 — Terraform CI/CD

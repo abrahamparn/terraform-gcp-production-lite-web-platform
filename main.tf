@@ -78,6 +78,16 @@ module "compute" {
   ]
 }
 
+module "security" {
+  source = "./modules/security"
+
+  enable_cloud_armor  = var.enable_cloud_armor
+  environment         = var.environment
+  policy_name         = var.cloud_armor_policy_name
+  default_rule_action = var.cloud_armor_default_rule_action
+  rules               = var.cloud_armor_rules
+}
+
 
 module "load_balancer" {
   source                 = "./modules/load-balancer"
@@ -90,6 +100,10 @@ module "load_balancer" {
   enable_https                    = var.enable_https
   enable_http_redirect            = var.enable_http_redirect
   managed_ssl_certificate_domains = var.managed_ssl_certificate_domains
+
+  security_policy_self_link = module.security.security_policy_self_link
+  enable_backend_logging    = var.enable_backend_logging
+  backend_log_sample_rate   = var.backend_log_sample_rate
 
   depends_on = [time_sleep.health_check_ready]
 }

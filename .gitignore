@@ -9,6 +9,8 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+!environments/*.tfvars
+
 
 # Terraform plan files
 *.tfplan

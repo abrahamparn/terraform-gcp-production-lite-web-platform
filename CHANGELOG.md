@@ -2,7 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - v1.2 Security Hardening
+## [v2.0.0] - 24 May 2026
+
+### Added
+
+- GitHub Actions workflow for Terraform pull request planning
+- GitHub Actions workflow for manually approved Terraform apply
+- Workload Identity Federation documentation for keyless Google Cloud authentication
+- `environments/dev.tfvars` for CI/CD environment inputs
+- CI/CD documentation covering plan, approval, apply, and state access flow
+
+### Changed
+
+- updated README to describe v2.0 as the current CI/CD stage
+- updated design decisions to explain the manual apply and keyless authentication choices
+- updated version roadmap to mark Terraform CI/CD as implemented pending workflow, repository variable, and WIF verification
+
+## [v1.2.0] - 23 May 2026
 
 ### Added
 

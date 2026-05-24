@@ -21,19 +21,15 @@ concurrency:
   group: terraform-apply
   cancel-in-progress: false
 
+env:
+  TF_WORKING_DIR: ${{ vars.TF_WORKING_DIR || '.' }}
+
 jobs:
-  terraform-apply:
-    name: Terraform Apply
+  terraform-plan:
+    name: Terraform Plan Before Apply
     runs-on: ubuntu-latest
 
     if: ${{ github.event.inputs.confirm_apply == 'APPLY' }}
-
-    environment:
-      name: terraform-apply
-
-    defaults:
-      run:
-        working-directory: ${{ vars.TF_WORKING_DIR }}
 
     steps:
       - name: Checkout repository
@@ -57,12 +53,15 @@ jobs:
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform init
         run: terraform init -input=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform validate
         run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform plan for apply
         run: |
@@ -71,9 +70,68 @@ jobs:
             -no-color \
             -var-file=environments/dev.tfvars \
             -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Generate plain-text plan
+        run: terraform show -no-color tfplan > tfplan.txt
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Show plan summary
         run: terraform show -no-color tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Upload Terraform apply plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-plan-${{ github.run_id }}
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/tfplan.txt
+          retention-days: 7
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+
+    needs: terraform-plan
+
+    environment:
+      name: terraform-apply
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ vars.TF_VERSION }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Terraform init
+        run: terraform init -input=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Download Terraform apply plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-apply-plan-${{ github.run_id }}
+          path: ${{ env.TF_WORKING_DIR }}
+
+      - name: Show reviewed plan summary
+        run: terraform show -no-color tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}

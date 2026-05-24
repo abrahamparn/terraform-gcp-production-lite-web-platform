@@ -1,17 +1,28 @@
 name: Terraform Plan
 
 on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+  pull-requests: write
+
+concurrency:
   group: terraform-plan-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  TF_WORKING_DIR: ${{ vars.TF_WORKING_DIR || '.' }}
 
 jobs:
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: ${{ vars.TF_WORKING_DIR }}
 
     steps:
       - name: Checkout repository
@@ -33,12 +44,15 @@ jobs:
 
       - name: Terraform format check
         run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform init
         run: terraform init -input=false
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform validate
         run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform plan
         id: plan
@@ -48,24 +62,28 @@ jobs:
             -no-color \
             -var-file=environments/dev.tfvars \
             -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Generate plain-text plan
         run: terraform show -no-color tfplan > tfplan.txt
+        working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Upload Terraform plan artifact
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-${{ github.run_id }}
-          path: ${{ vars.TF_WORKING_DIR }}/tfplan.txt
+          path: ${{ env.TF_WORKING_DIR }}/tfplan.txt
           retention-days: 7
 
       - name: Comment plan summary on PR
+        if: ${{ github.event_name == 'pull_request' }}
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const path = '${{ vars.TF_WORKING_DIR }}/tfplan.txt';
-            const plan = fs.readFileSync(path, 'utf8');
+            const path = require('path');
+            const planPath = path.join(process.env.TF_WORKING_DIR || '.', 'tfplan.txt');
+            const plan = fs.readFileSync(planPath, 'utf8');
             const maxLength = 60000;
             const truncated = plan.length > maxLength
               ? plan.substring(0, maxLength) + '\n\n... plan truncated. Download the workflow artifact for full plan.'
@@ -73,7 +91,7 @@ jobs:
 
             const body = `## Terraform Plan\n\n\`\`\`terraform\n${truncated}\n\`\`\``;
 
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,

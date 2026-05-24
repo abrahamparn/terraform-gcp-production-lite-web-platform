@@ -9,10 +9,11 @@ This project provisions a small but production-shaped application infrastructure
 3. An external HTTP(S) Load Balancer,
 4. Google-managed HTTPS certificates,
 5. Optional Cloud Armor backend security policy,
-6. Health checks,
-7. Firewall rules,
-8. Service accounts, and
-9. Remote Terraform state
+6. GitHub Actions based Terraform CI/CD,
+7. Health checks,
+8. Firewall rules,
+9. Service accounts, and
+10. Remote Terraform state
 
 The goal of this repository is not to build a full enterprise landing zone. The goal is to demonstrate that application infrastructure can be created in a clean, modular, repeatable, and operationally understandable way using Terraform.
 
@@ -21,6 +22,8 @@ The goal of this repository is not to build a full enterprise landing zone. The 
 Current version:
 
 > V1.2: Security Hardening
+
+> V2.0: Terraform CI/CD
 
 ## V1.1 - HTTPS and Custom Domain
 
@@ -46,6 +49,21 @@ The backend architecture remains the same:
 This version adds an optional Cloud Armor backend security policy to the existing backend service and enables load balancer request logging configuration for policy verification.
 
 The HTTP(S) frontend, URL map, backend service, and regional MIG remain shared. New WAF rules should begin in preview mode and be reviewed in request logs before enforcement.
+
+## V2.0 - Terraform CI/CD
+
+This version adds a GitHub Actions workflow model for Terraform change control.
+
+The CI/CD design uses:
+
+- Terraform Plan workflow for pull requests
+- Terraform Apply workflow triggered manually after review
+- GitHub environment approval for apply
+- Workload Identity Federation for Google Cloud authentication
+- no service account JSON key
+- `environments/dev.tfvars` for non-sensitive environment inputs
+
+The apply path is intentionally manual. The goal is to automate validation and planning while still requiring a human-reviewed plan before infrastructure changes are applied.
 
 ## Why I created this
 
@@ -97,6 +115,9 @@ I understand how to provision application infrastructure using Terraform, includ
 - external HTTP Load Balancer
 - firewall boundaries
 - IAP SSH access pattern
+- Terraform plan automation
+- manual apply approval workflow
+- Workload Identity Federation for CI/CD
 - operational verification
 - versioned infrastructure roadmap
 
@@ -106,9 +127,9 @@ This version intentionally does not include:
 
 - Cloud SQL
 - Secret Manager
-- CI/CD
 - multi-region deployment
 - blue-green deployment
+- fully automated production apply without approval
 - full observability stack
 - Kubernetes
 - any other expensive things
@@ -990,7 +1011,7 @@ HTTP-to-HTTPS redirect
 
 ### v1.2 — Security Hardening
 
-Current Version; implemented in Terraform and pending deployment verification:
+Previous Version:
 
 ```text
 Cloud Armor backend security policy
@@ -1001,7 +1022,7 @@ security policy rollout and verification documentation
 
 ### v2.0 — Terraform CI/CD
 
-Planned improvements:
+Current Version:
 
 ```text
 GitHub Actions
@@ -1011,6 +1032,7 @@ terraform plan on pull request
 manual approval before apply
 Workload Identity Federation
 no service account JSON key
+environment-specific tfvars file
 ```
 
 ### v2.1 — Drift and Recovery

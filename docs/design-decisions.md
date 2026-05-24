@@ -59,3 +59,23 @@ v1.2 tightens this posture by keeping only required ingress paths
 ## Decision 15 — Enable backend logging
 
 Backend service logging is enabled so Cloud Armor decisions and load balancer requests can be reviewed in Cloud Logging.
+
+## Decision 16 — Add Terraform CI/CD in v2.0
+
+v2.0 introduces GitHub Actions for Terraform validation, planning, and controlled apply. The goal is to move infrastructure changes through a repeatable review path instead of relying only on local terminal commands.
+
+## Decision 17 — Run Terraform plan on pull requests
+
+The plan workflow runs `terraform fmt -check -recursive`, `terraform init`, `terraform validate`, and `terraform plan` for pull requests. This makes the infrastructure diff visible before merge and catches formatting or validation errors early.
+
+## Decision 18 — Keep Terraform apply manual
+
+Apply is intentionally not automatic on merge. The apply workflow is manually triggered with `workflow_dispatch`, requires the user to type `APPLY`, and is designed to run behind the `terraform-apply` GitHub environment. This keeps real infrastructure mutation behind explicit human approval.
+
+## Decision 19 — Use Workload Identity Federation instead of service account keys
+
+GitHub Actions authenticates to Google Cloud through Workload Identity Federation. This avoids committing, storing, rotating, or leaking a long-lived service account JSON key.
+
+## Decision 20 — Keep environment values in `environments/dev.tfvars`
+
+v2.0 introduces an environment-specific tfvars file for CI. This keeps the workflow command stable while allowing environment inputs to live in a predictable location. Sensitive values must still stay out of committed tfvars files.

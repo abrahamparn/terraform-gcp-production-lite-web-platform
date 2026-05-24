@@ -39,11 +39,15 @@ Status: Completed
 
 ## v2.0 — Terraform CI/CD
 
+Status: Completed
+
 - GitHub Actions
 - plan on pull request
 - manual approval before apply
 - Workload Identity Federation
 - no service account JSON key
+- environment-specific tfvars file
+- plan artifact and PR plan visibility
 
 ## v2.1 — Drift and Recovery
 
